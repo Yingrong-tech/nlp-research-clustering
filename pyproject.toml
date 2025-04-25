@@ -1,0 +1,27 @@
+[project]
+name = "nlp-research-clustering"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "waritboonmasiri",email = "warit.boonmasiri@gmail.com"}
+]
+readme = "README.md"
+requires-python = ">=3.10,<3.13"
+dependencies = [
+    "jupyter (>=1.1.1,<2.0.0)",
+    "pandas (>=2.2.3,<3.0.0)",
+    "seaborn (>=0.13.2,<0.14.0)",
+    "tqdm (>=4.67.1,<5.0.0)",
+    "langdetect (>=1.0.9,<2.0.0)",
+    "spacy (>=3.8.5)",
+    "swifter (>=1.4.0,<2.0.0)",
+    "scikit-learn (>=1.6.1,<2.0.0)",
+    "en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0.tar.gz"
+]
+
+[tool.poetry.dependencies]
+en_core_web_sm = {url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0.tar.gz"}
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
