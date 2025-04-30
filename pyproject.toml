@@ -16,11 +16,14 @@ dependencies = [
     "spacy (>=3.8.5)",
     "swifter (>=1.4.0,<2.0.0)",
     "scikit-learn (>=1.6.1,<2.0.0)",
-    "en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0.tar.gz"
+    "en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0.tar.gz",
+    "en-core-sci-lg @ https://s3-us-west-2.amazonaws.com/ai2-s2-scispacy/releases/v0.2.4/en_core_sci_lg-0.2.4.tar.gz",
+    "bokeh (>=3.7.2,<4.0.0)"
 ]
 
 [tool.poetry.dependencies]
 en_core_web_sm = {url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0.tar.gz"}
+en_core_sci_lg = {url = "https://s3-us-west-2.amazonaws.com/ai2-s2-scispacy/releases/v0.2.4/en_core_sci_lg-0.2.4.tar.gz"}
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
