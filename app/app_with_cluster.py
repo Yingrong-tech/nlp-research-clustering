@@ -56,97 +56,20 @@ cluster_name_map = {
     19: "tasks, question, meta",
 }
 
-CLUSTERS = {
-    "— Select a topic —": None,
-    **{name: cid for cid, name in cluster_name_map.items()}
-}
-
-
-@st.cache_resource
-def load_selected_clustered_and_index(cluster_id):
-    df = pd.read_csv(Config.CLUSTER_PATH)
-    subdf = df[df.cluster_id == cluster_id].reset_index(drop=True)
-
-    retriever, _, _ = load_chat_models()
-    summaries = subdf.summary.tolist()
-    embeddings = retriever.encode(summaries, normalize_embeddings=True)
-
-    dim = embeddings.shape[1]
-    index = faiss.IndexFlatIP(dim)
-    index.add(embeddings)
-    return subdf, index
-
-
-@st.cache_resource
-def load_chat_models():
-    login(token=Config.HF_TOKEN)
-
-    retriever = SentenceTransformer("all-MiniLM-L6-v2", device=Config.DEVICE)
-    tokenizer = AutoTokenizer.from_pretrained(Config.PRETRAIN_MODEL)
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token
-
-    llm = AutoModelForCausalLM.from_pretrained(
-        Config.PRETRAIN_MODEL,
-        device_map={"": Config.DEVICE},
-        torch_dtype=torch.bfloat16 if torch.cuda.is_available() else torch.float32,
-    )
-    return retriever, tokenizer, llm
-
-
-def fetch_context(base_df, retriever_model, index, prompt, k=20):
-    k = min(k, len(base_df))
-    q_emb = retriever_model.encode([prompt], normalize_embeddings=True)
-    _, I = index.search(q_emb, k)
-    return I[0].tolist()
-
-
-def build_prompt(subdf, indices, query):
-    snippets = []
-    for i in indices:
-        row = subdf.iloc[i]
-        title = row.title
-        truncated = textwrap.shorten(row.summary, width=1200, placeholder="…")
-        snippets.append(f"{title}: {truncated}")
-    ctx = "\n\n".join(snippets)
-    return (
-        "Use the context below to answer the question.\n\n"
-        f"Context:\n{ctx}\n\n"
-        f"Question: {query}\n"
-        "Answer:"
-    )
-
-
-def format_references(subdf, indices):
-    lines = []
-    for i in indices:
-        row = subdf.iloc[i]
-        lines.append(f"📄 '{row.title}', {row.published_date}")
-    return "\n".join(lines)
-
-
-def generate_answer(base_df, retriever_model, index, tokenizer, llm_model, prompt, **gen_kwargs):
-    idxs = fetch_context(base_df, retriever_model, index, prompt)
-    full_prompt = build_prompt(base_df, idxs, prompt)
-
-    tokenized = tokenizer(
-        full_prompt,
-        return_tensors="pt",
-        truncation=True,
-        max_length=8192,
-    )
-    inputs = {k: v.to(Config.DEVICE) for k, v in tokenized.items()}
-
-    out = llm_model.generate(
-        **inputs,
-        max_new_tokens=512,
-        do_sample=True,
-        temperature=0.7,
-        top_p=0.9,
-        **gen_kwargs
-    )
-    resp = tokenizer.decode(out[0], skip_special_tokens=True)
-    return resp.split("Answer:")[-1].strip() if "Answer:" in resp else resp.strip()
+# def build_prompt(subdf, indices, query):
+#     snippets = []
+#     for i in indices:
+#         row = subdf.iloc[i]
+#         title = row.title
+#         truncated = textwrap.shorten(row.summary, width=1200, placeholder="…")
+#         snippets.append(f"{title}: {truncated}")
+#     ctx = "\n\n".join(snippets)
+#     return (
+#         "Use the context below to answer the question.\n\n"
+#         f"Context:\n{ctx}\n\n"
+#         f"Question: {query}\n"
+#         "Answer:"
+#     )
 
 
 @st.cache_resource
@@ -181,34 +104,6 @@ def load_cluster() -> pd.DataFrame:
     with open(Config.CLUSTER_PATH, "rb") as f:
         clustered_data = pd.read_csv(f)
     return clustered_data
-
-
-def qa_tab(vs, qa):
-    st.header("📚 Q&A over Cluster Research Summaries")
-    query = st.text_input("Your question", "")
-    if st.button("Ask") and query:
-        with st.spinner("🔍 Retrieving answer…"):
-            res = qa({"query": query})
-        st.subheader("🏷️ Answer")
-        st.write(res["result"])
-
-        retrieved_ids = []
-        for doc in res["source_documents"]:
-            first_line = doc.page_content.split("\n", 1)[0]
-            if first_line.lower().startswith("id:"):
-                _, raw_id = first_line.split(":", 1)
-                retrieved_ids.append(raw_id.strip())
-            else:
-                retrieved_ids.append(None)
-
-        st.session_state["retrieved_ids"] = retrieved_ids
-
-        st.subheader("📄 Source Chunks")
-        for i, doc in enumerate(res["source_documents"], start=1):
-            first_line = doc.page_content.split("\n", 1)[0]
-            display_id = first_line.split(":", 1)[1].strip() if ":" in first_line else "?"
-            with st.expander(f"Chunk #{i} — {display_id}"):
-                st.text(doc.page_content)
 
 
 def cluster_tab(df_cluster: pd.DataFrame):
@@ -271,47 +166,62 @@ def main():
     qa = load_qa(vs)
     df_cluster = load_cluster()
 
-    tab1, tab2, tab3 = st.tabs(["Chat", "Q&A", "Cluster Visualization"])
+    tab1, tab2 = st.tabs(["Research Chat", "Cluster Visualization"])
     with tab1:
-        retriever_model, tokenizer, llm_model = load_chat_models()
-        st.title("💬 RAG Chatbot with Fast Cluster Switching")
-        st.write("Select a cluster, then ask questions. Gemma-7b-it will respond using the selected cluster's context.")
+        if 'chat_answers_history' not in st.session_state:
+            st.session_state['chat_answers_history'] = []
+        if 'user_prompt_history' not in st.session_state:
+            st.session_state['user_prompt_history'] = []
+        if 'chat_history' not in st.session_state:
+            st.session_state['chat_history'] = []
+        if 'select_summary' not in st.session_state:
+            st.session_state['select_summary'] = []
+        if "source_documents" not in st.session_state:
+            st.session_state['source_documents'] = []
+        if "retrieved_ids" not in st.session_state:
+            st.session_state['retrieved_ids'] = []
+        col1, col2 = st.columns([3, 2])
+        col1.subheader("QA ChatBot")
+        col2.subheader("📄Research Source")
 
-        cluster_name = st.selectbox("Choose a knowledge cluster", list(CLUSTERS.keys()))
-        cluster_id = CLUSTERS[cluster_name]
+        if st.session_state["chat_answers_history"]:
+            for i, j in zip(st.session_state["chat_answers_history"], st.session_state["user_prompt_history"]):
+                message1 = col1.chat_message("user")
+                message1.write(j)
+                message2 = col1.chat_message("assistant")
+                message2.write(i)
 
-        if cluster_id is None:
-            st.info("Please select a cluster above.")
-            st.stop()
+        with col1:
+            prompt = col1.chat_input("Enter your questions here")
+            if prompt:
+                with st.spinner("Thinking......"):
+                    res = qa({"query": f"User ask the following {prompt}"})
+                    retrieved_ids = []
+                    for doc in res["source_documents"]:
+                        first_line = doc.page_content.split("\n", 1)[0]
+                        if first_line.lower().startswith("id:"):
+                            _, raw_id = first_line.split(":", 1)
+                            retrieved_ids.append(raw_id.strip())
+                        else:
+                            retrieved_ids.append(None)
+                    st.session_state["retrieved_ids"] = retrieved_ids
+                    st.session_state["source_documents"] = res["source_documents"]
+                    output = {
+                        'answer': res["result"]
+                    }
+                    st.session_state["chat_answers_history"].append(output['answer'])
+                    st.session_state["user_prompt_history"].append(prompt)
+                    st.session_state["chat_history"].append((prompt, output['answer']))
 
-        subdf, index = load_selected_clustered_and_index(cluster_id)
+        with col2:
+            source_docs = st.session_state["source_documents"]
+            for i, doc in enumerate(source_docs, start=1):
+                first_line = doc.page_content.split("\n", 1)[0]
+                display_id = first_line.split(":", 1)[1].strip() if ":" in first_line else "?"
+                with st.expander(f"Chunk #{i} — {display_id}"):
+                    st.text(doc.page_content)
 
-        if "messages" not in st.session_state:
-            st.session_state.messages = []
-
-        for msg in st.session_state.messages:
-            with st.chat_message(msg["role"]):
-                st.markdown(msg["content"])
-
-        if user_q := st.chat_input("Ask me anything…"):
-            # show user message
-            st.session_state.messages.append({"role": "user", "content": user_q})
-            with st.chat_message("user"):
-                st.markdown(user_q)
-
-            idxs = fetch_context(subdf, retriever_model, index, user_q)
-            refs = format_references(subdf, idxs)
-            st.session_state.messages.append({"role": "assistant", "content": f"**References:**\n{refs}"})
-            with st.chat_message("assistant"):
-                st.markdown(f"**References:**\n{refs}")
-
-            ans = generate_answer(subdf, retriever_model, index, tokenizer, llm_model, user_q)
-            st.session_state.messages.append({"role": "assistant", "content": ans})
-            with st.chat_message("assistant"):
-                st.markdown(ans)
     with tab2:
-        qa_tab(vs, qa)
-    with tab3:
         cluster_tab(df_cluster)
 
 
