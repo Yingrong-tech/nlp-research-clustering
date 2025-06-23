@@ -20,15 +20,15 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 
 @st.cache_resource
 def load_models():
-    login(token="XXXX")
+    # login(token="XXXX")
 
     retriever = SentenceTransformer("all-MiniLM-L6-v2", device=device)
-    tokenizer = AutoTokenizer.from_pretrained("google/gemma-7b-it")
+    tokenizer = AutoTokenizer.from_pretrained("google/gemma-2b-it")
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
     llm = AutoModelForCausalLM.from_pretrained(
-        "google/gemma-7b-it",
+        "google/gemma-2b-it",
         device_map="auto",
         torch_dtype=torch.bfloat16 if torch.cuda.is_available() else torch.float32,
     )
@@ -38,7 +38,7 @@ def load_models():
 @st.cache_resource
 def load_index(cluster_id):
     # Load CSV and filter
-    df = pd.read_csv("cluster_sample_10000.csv")
+    df = pd.read_csv("../output/cluster_sample_10000_v2.csv")
     subdf = df[df.cluster_id == cluster_id].reset_index(drop=True)
 
     # Embed & index
@@ -57,7 +57,8 @@ def load_index(cluster_id):
 retriever_model, tokenizer, llm_model = load_models()
 
 # --- UI ---
-st.title("💬 RAG Chatbot with Fast Cluster Switching")
+# st.title("💬 RAG Chatbot with Fast Cluster Switching")
+st.title('💬 ScrapeChat')
 st.write("Select a cluster, then ask questions. Gemma-7b-it will respond using the selected cluster's context.")
 
 cluster_name = st.selectbox("Choose a knowledge cluster", list(CLUSTERS.keys()))
@@ -99,7 +100,7 @@ def format_references(indices):
     for i in indices:
         row = subdf.iloc[i]
         lines.append(f"📄 '{row.title}', {row.published_date}")
-    return "\n".join(lines)
+    return "\n\n".join(lines)
 
 
 def generate_answer(prompt, **gen_kwargs):
@@ -143,9 +144,9 @@ if user_q := st.chat_input("Ask me anything…"):
     # references
     idxs = fetch_context(user_q)
     refs = format_references(idxs)
-    st.session_state.messages.append({"role": "assistant", "content": f"**References:**\n{refs}"})
+    st.session_state.messages.append({"role": "assistant", "content": f"**References:**\n\n{refs}"})
     with st.chat_message("assistant"):
-        st.markdown(f"**References:**\n{refs}")
+        st.markdown(f"**References:**\n\n{refs}")
 
     # answer
     ans = generate_answer(user_q)

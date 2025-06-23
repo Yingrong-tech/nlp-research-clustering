@@ -25,11 +25,11 @@ else:
 class Config:
     DEVICE: str = DEVICE
     HF_TOKEN: str = "XXXXX"
-    # PRETRAIN_MODEL: str = # "google/gemma-7b-it" This is quite big
-    PRETRAIN_MODEL: str = "distilgpt2"  # Good for testing
-    BASE_OUTPUT_PATH: str = '/Users/waritboonmasiri/PycharmProjects/nlp-research-clustering/output/'
-    INDEX_PATH: str = "/Users/waritboonmasiri/PycharmProjects/nlp-research-clustering/output/faiss2/faiss_index"
-    CLUSTER_PATH: str = "/Users/waritboonmasiri/PycharmProjects/nlp-research-clustering/output/df_research_clustered_10000_xy.csv"
+    PRETRAIN_MODEL: str = "google/gemma-7b-it"  # This is quite big
+    # PRETRAIN_MODEL: str = "distilgpt2"  # Good for testing
+    BASE_OUTPUT_PATH: str = '../output/'
+    INDEX_PATH: str = "../output/faiss_index"
+    CLUSTER_PATH: str = "../output/df_research_clustered_10000_xy.csv"
 
 
 # Cluster name extract from keywords, see eda.py
@@ -108,7 +108,7 @@ def load_cluster() -> pd.DataFrame:
 
 def cluster_tab(df_cluster: pd.DataFrame):
     st.header("🔎 Cluster TSNE Scatter Plot")
-    st.write("Faded points are NOT in the last answer.  Bright points are retrieved.")
+    # st.write("Faded points are NOT in the last answer.  Bright points are retrieved.")
 
     retrieved = set(st.session_state.get("retrieved_ids", []))
     df_cluster["highlight"] = df_cluster["id"].isin(retrieved)
@@ -158,10 +158,10 @@ def cluster_tab(df_cluster: pd.DataFrame):
 
 def main():
     st.set_page_config(
-        page_title="🧠 Research Explorer",
+        page_title="🧠 ScrapeChat Research Explorer",
         layout="wide",
     )
-    st.title("🧠 Research Explorer")
+    st.title("🧠 ScrapeChat Research Explorer")
     vs = load_vectorstore()
     qa = load_qa(vs)
     df_cluster = load_cluster()
@@ -194,9 +194,16 @@ def main():
         with col1:
             prompt = col1.chat_input("Enter your questions here")
             if prompt:
-                with st.spinner("Thinking......"):
-                    res = qa({"query": f"User ask the following {prompt}"})
+                msg = col1.chat_message('user')
+                msg.write(prompt)
+
+                with st.spinner("Thinking..."):
+                    res = qa({"query": f"Answer the following prompt: {prompt}"})
+                    msg = col1.chat_message('assistant')
+                    msg.write(res["result"])
+
                     retrieved_ids = []
+
                     for doc in res["source_documents"]:
                         first_line = doc.page_content.split("\n", 1)[0]
                         if first_line.lower().startswith("id:"):
@@ -204,11 +211,12 @@ def main():
                             retrieved_ids.append(raw_id.strip())
                         else:
                             retrieved_ids.append(None)
+
                     st.session_state["retrieved_ids"] = retrieved_ids
                     st.session_state["source_documents"] = res["source_documents"]
-                    output = {
-                        'answer': res["result"]
-                    }
+
+                    output = {'answer': res["result"]}
+
                     st.session_state["chat_answers_history"].append(output['answer'])
                     st.session_state["user_prompt_history"].append(prompt)
                     st.session_state["chat_history"].append((prompt, output['answer']))
