@@ -29,8 +29,8 @@ def load_models():
 
     llm = AutoModelForCausalLM.from_pretrained(
         "google/gemma-2b-it",
-        device_map="auto",
-        torch_dtype=torch.bfloat16 if torch.cuda.is_available() else torch.float32,
+        device_map="cpu",
+        torch_dtype=torch.float32, # torch.bfloat16 if torch.cuda.is_available() else torch.float32,
     )
     return retriever, tokenizer, llm
 
